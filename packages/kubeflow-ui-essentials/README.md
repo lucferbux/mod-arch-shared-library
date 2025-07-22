@@ -1,70 +1,13 @@
-# Kubeflow UI Monorepo
+# kubeflow-ui-essentials
 
-This monorepo contains two packages for Kubeflow and modular architecture projects:
+## Overview
 
-## Packages
+Shared UI components and utilities for Kubeflow projects. This package contains all the shared UI components and utilities that are needed across Kubeflow upstream projects. It depends on mod-arch-shared for core architecture utilities.
 
-### 📦 [mod-arch-shared](./packages/mod-arch-shared)
-Core modular architecture utilities and components for micro-frontend projects.
-
-**Contents:**
-- API utilities for Kubernetes and application management
-- Core components (NavBar, NavSidebar, browserStorage)
-- Context providers (ModularArchContext, NotificationContext, ThemeContext)
-- Core hooks and utilities for modular architecture
-- TypeScript definitions
-
-### 📦 [kubeflow-ui-essentials](./packages/kubeflow-ui-essentials)  
-Shared UI components and utilities specifically for Kubeflow projects.
-
-**Contents:**
-- UI components for Kubeflow applications
-- Kubeflow-specific utilities and helpers
-- Theme support and styling
-
-## Quick Start
+## Installation
 
 ```bash
-# Install all dependencies
-npm install
-
-# Build both packages
-npm run build
-
-# Test both packages
-npm run test
-
-# Build specific package
-npm run build:mod-arch
-npm run build:kubeflow
-```
-
-## Development
-
-Each package is independently buildable and testable:
-
-```bash
-# Work on mod-arch-shared
-cd packages/mod-arch-shared
-npm install
-npm run build
-npm test
-
-# Work on kubeflow-ui-essentials  
-cd packages/kubeflow-ui-essentials
-npm install
-npm run build
-npm test
-```
-
-## Architecture
-
-- **mod-arch-shared**: Foundation package containing core modular architecture patterns
-- **kubeflow-ui-essentials**: Depends on mod-arch-shared, adds Kubeflow-specific functionality
-
-## License
-
-Apache-2.0
+npm install kubeflow-ui-essentials mod-arch-shared @mui/material @mui/icons-material @mui/types sass sass-loader
 ```
 
 The library requires peer dependencies to be installed alongside the main package:
