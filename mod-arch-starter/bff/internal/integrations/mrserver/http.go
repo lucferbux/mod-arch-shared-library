@@ -10,7 +10,7 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
-	helper "github.com/kubeflow/model-registry/ui/bff/internal/helpers"
+	helper "github.com/kubeflow/mod-arch/ui/bff/internal/helpers"
 )
 
 type HTTPClientInterface interface {

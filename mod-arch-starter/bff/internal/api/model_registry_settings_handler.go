@@ -1,60 +1,8 @@
+//go:build ignore
+
 package api
 
-import (
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"time"
-
-	"github.com/julienschmidt/httprouter"
-	"github.com/kubeflow/model-registry/ui/bff/internal/constants"
-	helper "github.com/kubeflow/model-registry/ui/bff/internal/helpers"
-	"github.com/kubeflow/model-registry/ui/bff/internal/models"
-)
-
-type ModelRegistrySettingsListEnvelope Envelope[[]models.ModelRegistryKind, None]
-type ModelRegistrySettingsEnvelope Envelope[models.ModelRegistryKind, None]
-type ModelRegistryAndCredentialsSettingsEnvelope Envelope[models.ModelRegistryAndCredentials, None]
-type ModelRegistrySettingsPayloadEnvelope Envelope[models.ModelRegistrySettingsPayload, None]
-
-func (app *App) GetAllModelRegistriesSettingsHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	ctxLogger := helper.GetContextLoggerFromReq(r)
-	ctxLogger.Info("This functionality is not implement yet. This is a STUB API to unblock frontend development")
-
-	namespace, ok := r.Context().Value(constants.NamespaceHeaderParameterKey).(string)
-	if !ok || namespace == "" {
-		app.badRequestResponse(w, r, fmt.Errorf("missing namespace in the context"))
-	}
-
-	sslRootCertificateConfigMap := models.Entry{
-		Name: "ssl-config-map-name",
-		Key:  "ssl-config-map-key",
-	}
-
-	sslRootCertificateSecret := models.Entry{
-		Name: "ssl-secret-name",
-		Key:  "ssl-secret-key",
-	}
-
-	registries := []models.ModelRegistryKind{createSampleModelRegistry("model-registry", namespace, &sslRootCertificateConfigMap, nil),
-		createSampleModelRegistry("model-registry-dora", namespace, nil, &sslRootCertificateSecret),
-		createSampleModelRegistry("model-registry-bella", namespace, nil, nil)}
-
-	modelRegistryRes := ModelRegistrySettingsListEnvelope{
-		Data: registries,
-	}
-
-	err := app.WriteJSON(w, http.StatusOK, modelRegistryRes, nil)
-
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-	}
-
-}
-
-func (app *App) GetModelRegistrySettingsHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	ctxLogger := helper.GetContextLoggerFromReq(r)
-	ctxLogger.Info("This functionality is not implement yet. This is a STUB API to unblock frontend development")
+// Deprecated stub: model registry settings handlers removed from starter template.
 
 	namespace, ok := r.Context().Value(constants.NamespaceHeaderParameterKey).(string)
 	if !ok || namespace == "" {

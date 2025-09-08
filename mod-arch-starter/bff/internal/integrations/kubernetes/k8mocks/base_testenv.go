@@ -1,17 +1,19 @@
+//go:build ignore
+
 package k8mocks
 
 import (
 	"context"
 	"fmt"
-	kubernetes2 "github.com/kubeflow/model-registry/ui/bff/internal/integrations/kubernetes"
+	"log/slog"
+	"os"
+	"path/filepath"
+
+	kubernetes2 "github.com/kubeflow/mod-arch/ui/bff/internal/integrations/kubernetes"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"log/slog"
-	"os"
-	"path/filepath"
-	"runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
@@ -48,23 +50,7 @@ type TestEnvInput struct {
 
 func SetupEnvTest(input TestEnvInput) (*envtest.Environment, kubernetes.Interface, error) {
 	projectRoot, err := getProjectRoot()
-	if err != nil {
-		input.Logger.Error("failed to find project root", slog.String("error", err.Error()))
-		input.Cancel()
-		os.Exit(1)
-	}
-
-	testEnv := &envtest.Environment{
-		BinaryAssetsDirectory: filepath.Join(projectRoot, "bin", "k8s", fmt.Sprintf("1.29.0-%s-%s", runtime.GOOS, runtime.GOARCH)),
-	}
-
-	cfg, err := testEnv.Start()
-	if err != nil {
-		input.Logger.Error("failed to start envtest", slog.String("error", err.Error()))
-		input.Cancel()
-		os.Exit(1)
-	}
-
+	var DefaultTestUsers = []TestUser{}
 	clientset, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		input.Logger.Error("failed to create clientset", slog.String("error", err.Error()))

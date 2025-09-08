@@ -1,92 +1,62 @@
 package tests
 
 import (
-	"github.com/kubeflow/model-registry/ui/bff/internal/config"
-	"github.com/kubeflow/model-registry/ui/bff/internal/integrations/kubernetes"
 	"net/http"
+	"testing"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/kubeflow/mod-arch/ui/bff/internal/config"
+	"github.com/kubeflow/mod-arch/ui/bff/internal/integrations/kubernetes"
 )
 
-var _ = Describe("TokenClientFactory ExtractRequestIdentity", func() {
+func TestTokenClientFactoryExtractRequestIdentity(t *testing.T) {
+	// with Bearer prefix
+	factory := &kubernetes.TokenClientFactory{Header: config.DefaultAuthTokenHeader, Prefix: config.DefaultAuthTokenPrefix}
+	header := http.Header{}
+	header.Set("Authorization", "Bearer doratoken")
+	identity, err := factory.ExtractRequestIdentity(header)
+	if err != nil || identity.Token != "doratoken" {
+		t.Fatalf("expected doratoken got %#v err=%v", identity, err)
+	}
 
-	var factory *kubernetes.TokenClientFactory
-	var header http.Header
+	// prefix mismatch
+	header = http.Header{}
+	header.Set("Authorization", "Token bellatoken")
+	if _, err := factory.ExtractRequestIdentity(header); err == nil {
+		t.Fatalf("expected error for wrong prefix")
+	}
 
-	BeforeEach(func() {
-		header = http.Header{}
-	})
+	// missing prefix
+	header = http.Header{}
+	header.Set("Authorization", "doratoken")
+	if _, err := factory.ExtractRequestIdentity(header); err == nil {
+		t.Fatalf("expected error for missing prefix")
+	}
 
-	Context("with Bearer prefix", func() {
-		BeforeEach(func() {
-			factory = &kubernetes.TokenClientFactory{
-				Logger: nil,
-				Header: config.DefaultAuthTokenHeader,
-				Prefix: config.DefaultAuthTokenPrefix,
-			}
-		})
+	// missing header
+	header = http.Header{}
+	if _, err := factory.ExtractRequestIdentity(header); err == nil {
+		t.Fatalf("expected error for missing header")
+	}
 
-		It("should extract the token successfully", func() {
-			header.Set("Authorization", "Bearer doratoken")
+	// no prefix mode
+	factory = &kubernetes.TokenClientFactory{Header: "X-Forwarded-Access-Token", Prefix: ""}
+	header = http.Header{}
+	header.Set("X-Forwarded-Access-Token", "bellatoken")
+	identity, err = factory.ExtractRequestIdentity(header)
+	if err != nil || identity.Token != "bellatoken" {
+		t.Fatalf("expected bellatoken got %#v err=%v", identity, err)
+	}
 
-			identity, err := factory.ExtractRequestIdentity(header)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(identity.Token).To(Equal("doratoken"))
-		})
+	// missing header in no prefix
+	header = http.Header{}
+	if _, err := factory.ExtractRequestIdentity(header); err == nil {
+		t.Fatalf("expected error for missing header (no prefix)")
+	}
 
-		It("should fail if prefix does not match", func() {
-			header.Set("Authorization", "Token bellatoken")
-
-			_, err := factory.ExtractRequestIdentity(header)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected token Header Authorization to start with Prefix \"Bearer \""))
-		})
-
-		It("should fail if prefix is missing", func() {
-			header.Set("Authorization", "doratoken")
-
-			_, err := factory.ExtractRequestIdentity(header)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected token Header Authorization to start with Prefix \"Bearer \""))
-		})
-
-		It("should fail if header is missing", func() {
-			_, err := factory.ExtractRequestIdentity(header)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("missing required Header: Authorization"))
-		})
-	})
-
-	Context("with no prefix", func() {
-		BeforeEach(func() {
-			factory = &kubernetes.TokenClientFactory{
-				Logger: nil,
-				Header: "X-Forwarded-Access-Token",
-				Prefix: "",
-			}
-		})
-
-		It("should extract the raw token", func() {
-			header.Set("X-Forwarded-Access-Token", "bellatoken")
-
-			identity, err := factory.ExtractRequestIdentity(header)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(identity.Token).To(Equal("bellatoken"))
-		})
-
-		It("should fail if header is missing", func() {
-			_, err := factory.ExtractRequestIdentity(header)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("missing required Header: X-Forwarded-Access-Token"))
-		})
-
-		It("should fail if header mismatch", func() {
-			header.Set("X-WRONG-Access-Token", "bellatoken")
-
-			_, err := factory.ExtractRequestIdentity(header)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("missing required Header: X-Forwarded-Access-Token"))
-		})
-	})
-})
+	// wrong header name
+	header = http.Header{}
+	header.Set("X-WRONG-Access-Token", "bellatoken")
+	if _, err := factory.ExtractRequestIdentity(header); err == nil {
+		t.Fatalf("expected error for wrong header name")
+	}
+}

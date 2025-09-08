@@ -1,3 +1,5 @@
+//go:build ignore
+
 package api
 
 import (
@@ -5,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
-	helper "github.com/kubeflow/model-registry/ui/bff/internal/helpers"
-	"github.com/kubeflow/model-registry/ui/bff/internal/mocks"
-	"github.com/kubeflow/model-registry/ui/bff/internal/models"
+	helper "github.com/kubeflow/mod-arch/ui/bff/internal/helpers"
+	"github.com/kubeflow/mod-arch/ui/bff/internal/mocks"
+	"github.com/kubeflow/mod-arch/ui/bff/internal/models"
 )
 
 type CatalogSourceEnvelope Envelope[models.CatalogSource, None]

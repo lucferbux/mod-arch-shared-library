@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/kubeflow/model-registry/ui/bff/internal/api"
-	"github.com/kubeflow/model-registry/ui/bff/internal/config"
+	"github.com/kubeflow/mod-arch/ui/bff/internal/api"
+	"github.com/kubeflow/mod-arch/ui/bff/internal/config"
 
 	"log/slog"
 	"net/http"
@@ -19,19 +19,16 @@ import (
 
 func main() {
 	var cfg config.EnvConfig
-	var certFile, keyFile string
-
-	fmt.Println("Starting Model Registry UI BFF!")
+	fmt.Println("Starting Modular Architecture Starter BFF!")
 	flag.IntVar(&cfg.Port, "port", getEnvAsInt("PORT", 8080), "API server port")
-	flag.StringVar(&certFile, "cert-file", "", "Path to TLS certificate file")
-	flag.StringVar(&keyFile, "key-file", "", "Path to TLS key file")
 	flag.BoolVar(&cfg.MockK8Client, "mock-k8s-client", false, "Use mock Kubernetes client")
-	flag.BoolVar(&cfg.MockMRClient, "mock-mr-client", false, "Use mock Model Registry client")
-	flag.BoolVar(&cfg.DevMode, "dev-mode", false, "Use development mode for access to local K8s cluster")
-	flag.IntVar(&cfg.DevModePort, "dev-mode-port", getEnvAsInt("DEV_MODE_PORT", 8080), "Use port when in development mode")
-
-	// New deployment mode flag
-	flag.Var(&cfg.DeploymentMode, "deployment-mode", "Deployment mode (kubeflow, federated, or standalone)")
+	// Deployment / runtime flags
+	var deploymentModeRaw string
+	flag.StringVar(&deploymentModeRaw, "deployment-mode", getEnvAsString("DEPLOYMENT_MODE", "standalone"), "Deployment mode (standalone|integrated)")
+	flag.BoolVar(&cfg.DevMode, "dev-mode", getEnvAsBool("DEV_MODE", false), "Enable developer friendly behavior (verbose errors, relaxed CORS)")
+	flag.StringVar(&cfg.CertFile, "cert-file", getEnvAsString("TLS_CERT_FILE", ""), "TLS certificate file (enables HTTPS if set with key-file)")
+	flag.StringVar(&cfg.KeyFile, "key-file", getEnvAsString("TLS_KEY_FILE", ""), "TLS private key file (enables HTTPS if set with cert-file)")
+	flag.BoolVar(&cfg.InsecureSkipVerify, "insecure-skip-verify", getEnvAsBool("INSECURE_SKIP_VERIFY", false), "Skip TLS verification for outbound calls (development only)")
 
 	flag.StringVar(&cfg.StaticAssetsDir, "static-assets-dir", "./static", "Configure frontend static assets root directory")
 	flag.TextVar(&cfg.LogLevel, "log-level", parseLevel(getEnvAsString("LOG_LEVEL", "INFO")), "Sets server log level, possible values: error, warn, info, debug")
@@ -40,25 +37,15 @@ func main() {
 	flag.StringVar(&cfg.AuthTokenHeader, "auth-token-header", getEnvAsString("AUTH_TOKEN_HEADER", config.DefaultAuthTokenHeader), "Header used to extract the token (e.g., Authorization)")
 	flag.StringVar(&cfg.AuthTokenPrefix, "auth-token-prefix", getEnvAsString("AUTH_TOKEN_PREFIX", config.DefaultAuthTokenPrefix), "Prefix used in the token header (e.g., 'Bearer ')")
 
-	// TLS configuration flags
-	flag.BoolVar(&cfg.InsecureSkipVerify, "insecure-skip-verify", getEnvAsBool("INSECURE_SKIP_VERIFY", false), "Skip TLS certificate verification (useful for development, default: false)")
-
-	// Deprecated flags - kept for backward compatibility
-	flag.BoolVar(&cfg.StandaloneMode, "standalone-mode", false, "DEPRECATED: Use -deployment-mode=standalone instead")
-	flag.BoolVar(&cfg.FederatedPlatform, "federated-platform", false, "DEPRECATED: Use -deployment-mode=federated instead")
-
 	flag.Parse()
 
-	// Handle backward compatibility: if old flags are used, override deployment mode
-	if cfg.StandaloneMode {
-		cfg.DeploymentMode = config.DeploymentModeStandalone
-	} else if cfg.FederatedPlatform {
-		cfg.DeploymentMode = config.DeploymentModeFederated
+	// Parse deployment mode
+	dm, err := config.ParseDeploymentMode(deploymentModeRaw)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
 	}
-
-	// Ensure the deprecated boolean fields are consistent with the new deployment mode
-	cfg.StandaloneMode = cfg.DeploymentMode.IsStandaloneMode()
-	cfg.FederatedPlatform = cfg.DeploymentMode.IsFederatedMode()
+	cfg.DeploymentMode = dm
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: cfg.LogLevel,
@@ -79,31 +66,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Port),
-		Handler:      app.Routes(),
-		IdleTimeout:  time.Minute,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		ErrorLog:     slog.NewLogLogger(logger.Handler(), slog.LevelError),
+	srv := &http.Server{Addr: fmt.Sprintf(":%d", cfg.Port), Handler: app.Routes(), IdleTimeout: time.Minute, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, ErrorLog: slog.NewLogLogger(logger.Handler(), slog.LevelError)}
+
+	// Configure TLS if both cert and key are provided
+	useTLS := cfg.CertFile != "" && cfg.KeyFile != ""
+	if useTLS {
+		// Minimal secure defaults; can be extended.
+		srv.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 
 	// Start the server in a goroutine
 	go func() {
-		logger.Info("starting server", "addr", srv.Addr, "TLS enabled", (certFile != "" && keyFile != ""))
-		var err error
-		if certFile != "" && keyFile != "" {
-			// Configure TLS if both cert and key files are provided
-			tlsConfig := &tls.Config{
-				MinVersion: tls.VersionTLS13,
-			}
-			srv.TLSConfig = tlsConfig
-			err = srv.ListenAndServeTLS(certFile, keyFile)
+		logger.Info("starting server", "addr", srv.Addr, "deploymentMode", cfg.DeploymentMode, "devMode", cfg.DevMode, "tls", useTLS)
+		var serveErr error
+		if useTLS {
+			serveErr = srv.ListenAndServeTLS(cfg.CertFile, cfg.KeyFile)
 		} else {
-			err = srv.ListenAndServe()
+			serveErr = srv.ListenAndServe()
 		}
-		if err != nil && err != http.ErrServerClosed {
-			logger.Error("HTTP server ListenAndServe", "error", err)
+		if serveErr != nil && serveErr != http.ErrServerClosed {
+			logger.Error("HTTP server error", "error", serveErr)
 		}
 	}()
 

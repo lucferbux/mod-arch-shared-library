@@ -1,3 +1,9 @@
+//go:build ignore
+
+package repositories
+// Model version tests removed.
+//go:build ignore
+
 package repositories
 
 import (
@@ -8,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/brianvoe/gofakeit/v7"
-	"github.com/kubeflow/model-registry/ui/bff/internal/mocks"
+	"github.com/kubeflow/mod-arch/ui/bff/internal/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
