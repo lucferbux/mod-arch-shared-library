@@ -76,17 +76,15 @@ async function applyFlavorOverlays(flavorPath, workDir) {
 
 /**
  * Mirrors the installer's removeDefaultFolders() for the default flavor so the merged
- * workdir matches the real installer output. Removes base starter frontend configs the
- * overlay supersedes (webpack.*.js, the ESLint 9 flat config) and the standalone/shared
- * sources that are dropped for federated modules (and depend on mod-arch-shared, which
- * the default overlay no longer lists as a dependency).
+ * workdir matches the real installer output. Removes the base ESLint 9 flat config the
+ * overlay supersedes (.eslintrc.js) and the standalone/shared sources that are dropped
+ * for federated modules (and depend on mod-arch-shared, which the default overlay no
+ * longer lists as a dependency). Base and default both use rspack, so the rspack.*.js
+ * overlay files simply overwrite the base ones - no config cleanup needed there.
  * @param {string} frontendDir - The merged frontend directory
  */
 async function removeDefaultBaseConfigs(frontendDir) {
   const leftovers = [
-    path.join(frontendDir, 'config', 'webpack.common.js'),
-    path.join(frontendDir, 'config', 'webpack.dev.js'),
-    path.join(frontendDir, 'config', 'webpack.prod.js'),
     path.join(frontendDir, 'eslint.config.mjs'),
     path.join(frontendDir, 'src', 'shared'),
     path.join(frontendDir, 'src', 'app', 'standalone'),

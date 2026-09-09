@@ -84,16 +84,9 @@ async function removeDefaultFolders(flavor: StarterFlavor, targetDir: string) {
     await rm(kubeflowGuidePath, { force: true });
   }
 
-  // Remove base starter webpack configs - the default flavor overlay ships rspack instead
-  const webpackConfigs = ['webpack.common.js', 'webpack.dev.js', 'webpack.prod.js'];
-  for (const config of webpackConfigs) {
-    const configPath = path.join(targetDir, FRONTEND_DIR, 'config', config);
-    if (await fileExists(configPath)) {
-      await rm(configPath, { force: true });
-    }
-  }
-
-  // Remove base starter ESLint 9 flat config - the default flavor overlay ships ESLint 8 legacy (.eslintrc.js)
+  // Remove base starter ESLint 9 flat config - the default flavor overlay ships ESLint 8 legacy
+  // (.eslintrc.js). The base starter + kubeflow flavor keep the flat config. (Both flavors already
+  // use rspack, so the rspack.*.js overlay files simply overwrite the base ones - no cleanup needed.)
   const flatEslintConfigPath = path.join(targetDir, FRONTEND_DIR, 'eslint.config.mjs');
   if (await fileExists(flatEslintConfigPath)) {
     await rm(flatEslintConfigPath, { force: true });

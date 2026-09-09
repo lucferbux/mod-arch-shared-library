@@ -1,5 +1,5 @@
 const path = require('path');
-const { ModuleFederationPlugin } = require('@module-federation/enhanced/webpack');
+const { ModuleFederationPlugin } = require('@module-federation/enhanced/rspack');
 
 const deps = require('../package.json').dependencies;
 
