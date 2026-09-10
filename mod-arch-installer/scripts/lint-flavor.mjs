@@ -151,18 +151,18 @@ function runEslint(dir, files, fix = false) {
   
   return new Promise((resolve, reject) => {
     console.log(`[lint-flavor] Running ESLint on ${jsFiles.length} files...`);
-    // Run ESLint directly with npx to only lint the specified files
+    // Run ESLint via pnpm exec to only lint the specified files
     // Use --no-ignore to lint config files that would otherwise be ignored
     const args = [
+      'exec',
       'eslint',
-      '--ext', '.js,.ts,.jsx,.tsx',
       '--max-warnings', '0',
       '--no-ignore',
       ...(fix ? ['--fix'] : []),
       ...jsFiles
     ];
 
-    const proc = spawn('npx', args, {
+    const proc = spawn('pnpm', args, {
       cwd: dir,
       stdio: 'inherit',
       shell: true,
@@ -187,12 +187,13 @@ function runPrettier(dir, files, fix = false) {
   return new Promise((resolve, reject) => {
     console.log(`[lint-flavor] Running Prettier on ${files.length} files...`);
     const args = [
+      'exec',
       'prettier',
       ...(fix ? ['--write'] : ['--check']),
       ...files
     ];
 
-    const proc = spawn('npx', args, {
+    const proc = spawn('pnpm', args, {
       cwd: dir,
       stdio: 'inherit',
       shell: true,
@@ -207,14 +208,14 @@ function runPrettier(dir, files, fix = false) {
 }
 
 /**
- * Runs npm install in the specified directory.
- * @param {string} dir - Directory to run npm install in
+ * Runs pnpm install in the specified directory.
+ * @param {string} dir - Directory to run pnpm install in
  * @returns {Promise<void>}
  */
-function runNpmInstall(dir) {
+function runInstall(dir) {
   return new Promise((resolve, reject) => {
     console.log(`[lint-flavor] Installing dependencies in ${dir}...`);
-    const proc = spawn('npm', ['install', '--legacy-peer-deps'], {
+    const proc = spawn('pnpm', ['install'], {
       cwd: dir,
       stdio: 'inherit',
       shell: true,
@@ -224,7 +225,7 @@ function runNpmInstall(dir) {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`npm install failed with code ${code}`));
+        reject(new Error(`pnpm install failed with code ${code}`));
       }
     });
 
@@ -317,8 +318,24 @@ async function lintFlavor() {
       }
     }
 
-    // Install dependencies
-    await runNpmInstall(lintWorkDir);
+    // The base starter ships an ESLint 9 flat config at the workdir root. Remove it so ESLint,
+    // run from the flavor frontend, resolves the flavor's own config (the default flavor's
+    // .eslintrc.js) instead of walking up to a flat config whose plugins live only in the base.
+    await rm(path.join(lintWorkDir, 'eslint.config.mjs'), { force: true });
+
+    // Install dependencies in the flavor frontend. Its overlay package.json pins the flavor's
+    // own toolchain (e.g. the default flavor uses ESLint 8 legacy config), which can differ from
+    // the base starter copied at the workdir root, so we install and lint from here.
+    const frontendWorkDir = path.join(lintWorkDir, 'frontend');
+    // Ensure a pnpm-workspace.yaml is present so pnpm honors allowBuilds/overrides here. The
+    // default flavor removes it from shipped output (federated modules use odh's root workspace),
+    // but the harness installs the frontend standalone, so seed it from the base starter.
+    await cp(
+      path.join(starterFrontendRoot, 'pnpm-workspace.yaml'),
+      path.join(frontendWorkDir, 'pnpm-workspace.yaml'),
+      { force: true },
+    );
+    await runInstall(frontendWorkDir);
 
     // Get paths of flavor files mapped to work directory
     const workdirFiles = flavorFiles.map((f) => {
@@ -331,11 +348,10 @@ async function lintFlavor() {
       return path.join(lintWorkDir, relativePath);
     });
 
-    // Run ESLint/Prettier from the frontend workdir so the frontend's own tsconfig
-    // (which defines the `~` path alias) and eslintrc are the nearest configs. Running
-    // from the module root would resolve `~` against the base copy at the workdir root
-    // and misreport intra-package alias imports as extraneous dependencies.
-    const frontendWorkDir = path.join(lintWorkDir, 'frontend');
+    // ESLint/Prettier run from frontendWorkDir (defined above) so the frontend's own tsconfig
+    // (which defines the `~` path alias) and eslintrc are the nearest configs. Running from the
+    // module root would resolve `~` against the base copy at the workdir root and misreport
+    // intra-package alias imports as extraneous dependencies.
 
     // Run Prettier first
     const prettierExitCode = await runPrettier(frontendWorkDir, workdirFiles, fixFlag);

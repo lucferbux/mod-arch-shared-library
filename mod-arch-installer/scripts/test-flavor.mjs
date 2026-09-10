@@ -96,14 +96,14 @@ async function removeDefaultBaseConfigs(frontendDir) {
 }
 
 /**
- * Runs npm install in the specified directory.
- * @param {string} dir - Directory to run npm install in
+ * Runs pnpm install in the specified directory.
+ * @param {string} dir - Directory to run pnpm install in
  * @returns {Promise<void>}
  */
-function runNpmInstall(dir) {
+function runInstall(dir) {
   return new Promise((resolve, reject) => {
     console.log(`[test-flavor] Installing dependencies in ${dir}...`);
-    const proc = spawn('npm', ['install', '--legacy-peer-deps'], {
+    const proc = spawn('pnpm', ['install'], {
       cwd: dir,
       stdio: 'inherit',
       shell: true,
@@ -113,7 +113,7 @@ function runNpmInstall(dir) {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`npm install failed with code ${code}`));
+        reject(new Error(`pnpm install failed with code ${code}`));
       }
     });
 
@@ -132,7 +132,7 @@ function runLint(dir, extraArgs = []) {
     console.log(`[test-flavor] Running lint in ${dir}...`);
     // Only run test:lint, skip type-check and unit tests since they require external dependencies
     const args = ['run', 'test:lint', ...extraArgs];
-    const proc = spawn('npm', args, {
+    const proc = spawn('pnpm', args, {
       cwd: dir,
       stdio: 'inherit',
       shell: true,
@@ -199,9 +199,10 @@ async function testFlavor() {
       await removeDefaultBaseConfigs(path.join(testWorkDir, 'frontend'));
     }
 
-    // Install dependencies in frontend
+    // Install dependencies in frontend (pnpm-workspace.yaml ships as-is and provides the
+    // allowBuilds/overrides/shamefullyHoist settings pnpm needs).
     const frontendDir = path.join(testWorkDir, 'frontend');
-    await runNpmInstall(frontendDir);
+    await runInstall(frontendDir);
 
     // Run lint only (skip type-check and unit tests since they require external dependencies)
     const lintExtraArgs = process.argv.slice(3);

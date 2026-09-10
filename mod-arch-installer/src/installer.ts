@@ -91,6 +91,14 @@ async function removeDefaultFolders(flavor: StarterFlavor, targetDir: string) {
   if (await fileExists(flatEslintConfigPath)) {
     await rm(flatEslintConfigPath, { force: true });
   }
+
+  // Remove the standalone pnpm-workspace.yaml: a federated module is a member of the
+  // odh-dashboard pnpm workspace (its root pnpm-workspace.yaml governs settings/allowBuilds),
+  // so a per-module workspace file would create a conflicting nested workspace.
+  const pnpmWorkspacePath = path.join(targetDir, FRONTEND_DIR, 'pnpm-workspace.yaml');
+  if (await fileExists(pnpmWorkspacePath)) {
+    await rm(pnpmWorkspacePath, { force: true });
+  }
 }
 
 async function applyFrontendOverlay(flavor: StarterFlavor, targetDir: string) {
@@ -175,37 +183,11 @@ async function updateFrontendDependencies(options: InstallOptions, targetDir: st
   }
   packageJson.scripts = {
     ...packageJson.scripts,
-    'start:default': "STYLE_THEME=patternfly-theme npm run start:dev",
+    'start:default': 'STYLE_THEME=patternfly-theme pnpm run start:dev',
   };
   await writeJSON(packageJsonPath, packageJson);
-
-  if (options.flavor === 'default') {
-    const packageLockPath = path.join(targetDir, FRONTEND_DIR, 'package-lock.json');
-    const hasPackageLock = await fileExists(packageLockPath);
-    if (hasPackageLock) {
-      const packageLock = await readJSON(packageLockPath);
-      if (packageLock.packages) {
-        const rootPackage = packageLock.packages[''];
-        if (rootPackage) {
-          if (rootPackage.dependencies) {
-            delete rootPackage.dependencies['mod-arch-shared'];
-          }
-          if (rootPackage.devDependencies) {
-            delete rootPackage.devDependencies['mod-arch-shared'];
-          }
-        }
-        Object.keys(packageLock.packages).forEach((pkgKey) => {
-          if (pkgKey.startsWith('node_modules/mod-arch-shared')) {
-            delete packageLock.packages[pkgKey];
-          }
-        });
-      }
-      if (packageLock.dependencies) {
-        delete packageLock.dependencies['mod-arch-shared'];
-      }
-      await writeJSON(packageLockPath, packageLock);
-    }
-  }
+  // No lockfile surgery: the template ships no lockfile (pnpm regenerates pnpm-lock.yaml
+  // on first install), so editing package.json is sufficient.
 }
 
 async function initializeGitRepo(targetDir: string, initializeGit: boolean) {
@@ -228,22 +210,29 @@ async function installDependencies(targetDir: string, skipInstall: boolean) {
   }
 
   try {
-    await runCommand('npm', ['install'], { cwd: path.join(targetDir, FRONTEND_DIR) });
+    await runCommand('pnpm', ['install'], { cwd: path.join(targetDir, FRONTEND_DIR) });
   } catch (error) {
     logger.warn(`Dependency installation failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-async function renameGitignores(dir: string) {
+// npm strips dotfiles (.gitignore) from published tarballs, so the template bundles them
+// dot-less; restore the leading dot in the scaffolded project. (pnpm settings live in
+// pnpm-workspace.yaml, which is not a dotfile and ships as-is.)
+const DOTFILE_RESTORES: Record<string, string> = {
+  gitignore: '.gitignore',
+};
+
+async function renameDotfiles(dir: string) {
   const entries = await readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (entry.name !== '.git' && entry.name !== 'node_modules') {
-        await renameGitignores(fullPath);
+        await renameDotfiles(fullPath);
       }
-    } else if (entry.name === 'gitignore') {
-      const newPath = path.join(dir, '.gitignore');
+    } else if (DOTFILE_RESTORES[entry.name]) {
+      const newPath = path.join(dir, DOTFILE_RESTORES[entry.name]);
       await rename(fullPath, newPath);
     }
   }
@@ -282,17 +271,17 @@ export async function installStarter(options: InstallOptions) {
   currentStep++;
   logger.step(currentStep, totalSteps, `Applying module name "${options.moduleName.kebabCase}"...`);
   await replaceModuleNames(targetDir, options.moduleName);
-  await renameGitignores(targetDir);
+  await renameDotfiles(targetDir);
   logger.success('Module name applied');
 
   // Step 4: Install dependencies (optional)
   currentStep++;
   if (!options.skipInstall) {
-    logger.step(currentStep, totalSteps, 'Installing npm dependencies...');
+    logger.step(currentStep, totalSteps, 'Installing dependencies (pnpm)...');
     await installDependencies(targetDir, options.skipInstall);
     logger.success('Dependencies installed');
   } else {
-    logger.step(currentStep, totalSteps, 'Skipping npm install (use --install to enable)');
+    logger.step(currentStep, totalSteps, 'Skipping install (use --install to enable)');
   }
 
   // Step 5: Initialize git (optional)
