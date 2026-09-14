@@ -317,8 +317,17 @@ async function lintFlavor() {
       }
     }
 
-    // Install dependencies
-    await runNpmInstall(lintWorkDir);
+    // The base starter ships an ESLint 9 flat config at the workdir root. Remove it so ESLint,
+    // run from the flavor frontend, resolves the flavor's own config (the default flavor's
+    // .eslintrc.js) instead of walking up to a flat config whose plugins live only in the base.
+    await rm(path.join(lintWorkDir, 'eslint.config.mjs'), { force: true });
+
+    // Install dependencies in the flavor frontend, not the workdir root. The overlay's
+    // frontend/package.json pins the flavor's own toolchain (the default flavor uses ESLint 8
+    // legacy config), which differs from the base starter copied at the workdir root. Installing
+    // and linting from here validates exactly the toolchain the generated module ships.
+    const frontendWorkDir = path.join(lintWorkDir, 'frontend');
+    await runNpmInstall(frontendWorkDir);
 
     // Get paths of flavor files mapped to work directory
     const workdirFiles = flavorFiles.map((f) => {
@@ -331,11 +340,10 @@ async function lintFlavor() {
       return path.join(lintWorkDir, relativePath);
     });
 
-    // Run ESLint/Prettier from the frontend workdir so the frontend's own tsconfig
-    // (which defines the `~` path alias) and eslintrc are the nearest configs. Running
-    // from the module root would resolve `~` against the base copy at the workdir root
-    // and misreport intra-package alias imports as extraneous dependencies.
-    const frontendWorkDir = path.join(lintWorkDir, 'frontend');
+    // ESLint/Prettier run from frontendWorkDir (defined above) so the frontend's own tsconfig
+    // (which defines the `~` path alias) and eslintrc are the nearest configs. Running from the
+    // module root would resolve `~` against the base copy at the workdir root and misreport
+    // intra-package alias imports as extraneous dependencies.
 
     // Run Prettier first
     const prettierExitCode = await runPrettier(frontendWorkDir, workdirFiles, fixFlag);

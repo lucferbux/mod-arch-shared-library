@@ -117,7 +117,6 @@ module.exports = {
     ],
     '@typescript-eslint/no-base-to-string': 'error',
     '@typescript-eslint/explicit-function-return-type': 'off',
-    '@typescript-eslint/interface-name-prefix': 'off',
     '@typescript-eslint/no-var-requires': 'off',
     '@typescript-eslint/no-require-imports': 'off',
     '@typescript-eslint/no-empty-function': 'error',

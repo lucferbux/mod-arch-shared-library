@@ -65,6 +65,11 @@ const getProxyHeaders = () => {
   return {};
 };
 
+// Loopback addresses the dev server may see for a local caller (IPv4, IPv6, and
+// IPv4-mapped IPv6). The fallback token is only injected for these so that binding
+// the dev server to 0.0.0.0 never relays the developer's credentials to remote callers.
+const LOOPBACK_ADDRESSES = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+
 // When using user_token auth, dynamically forward the authorization header from the
 // incoming request if present (e.g. from a host backend proxy with dev impersonation).
 // Fall back to the mock envtest token in standalone, or the kubeconfig token otherwise.
@@ -77,7 +82,9 @@ const onProxyReq = (proxyReq, req) => {
     proxyReq.setHeader('Authorization', incomingAuth);
     const token = incomingAuth.replace(/^Bearer\s+/i, '');
     proxyReq.setHeader('x-forwarded-access-token', token);
-  } else if (fallbackToken) {
+  } else if (fallbackToken && LOOPBACK_ADDRESSES.includes(req.socket?.remoteAddress)) {
+    // Only relay the fallback token for local callers; never for remote requests when
+    // the dev server is bound to 0.0.0.0 (guards against credential relay / confused deputy).
     proxyReq.setHeader('Authorization', `Bearer ${fallbackToken}`);
     proxyReq.setHeader('x-forwarded-access-token', fallbackToken);
   }
