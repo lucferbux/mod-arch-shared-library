@@ -269,6 +269,18 @@ async function lintFlavor() {
       }
       return true;
     });
+    // Skip the ESLint config itself: it is not application source, and the project's
+    // own `test:lint` glob (`./*.js`) never matches the dotfile `.eslintrc.js` either.
+    // Linting it with the TypeScript project parser fails since it is not a project file.
+    flavorFiles = flavorFiles.filter((f) => path.basename(f) !== '.eslintrc.js');
+    // For the default flavor, skip sources the installer removes (removeDefaultFolders):
+    // the standalone chrome is dropped for federated modules, so it never ships.
+    if (flavorArg === 'default') {
+      const standaloneDir = path.join('frontend', 'src', 'app', 'standalone');
+      flavorFiles = flavorFiles.filter(
+        (f) => !path.relative(flavorPath, f).startsWith(standaloneDir),
+      );
+    }
   } catch (error) {
     console.error(`[lint-flavor] Error scanning flavor '${flavorArg}': ${error.message}`);
     process.exit(1);
@@ -305,8 +317,17 @@ async function lintFlavor() {
       }
     }
 
-    // Install dependencies
-    await runNpmInstall(lintWorkDir);
+    // The base starter ships an ESLint 9 flat config at the workdir root. Remove it so ESLint,
+    // run from the flavor frontend, resolves the flavor's own config (the default flavor's
+    // .eslintrc.js) instead of walking up to a flat config whose plugins live only in the base.
+    await rm(path.join(lintWorkDir, 'eslint.config.mjs'), { force: true });
+
+    // Install dependencies in the flavor frontend, not the workdir root. The overlay's
+    // frontend/package.json pins the flavor's own toolchain (the default flavor uses ESLint 8
+    // legacy config), which differs from the base starter copied at the workdir root. Installing
+    // and linting from here validates exactly the toolchain the generated module ships.
+    const frontendWorkDir = path.join(lintWorkDir, 'frontend');
+    await runNpmInstall(frontendWorkDir);
 
     // Get paths of flavor files mapped to work directory
     const workdirFiles = flavorFiles.map((f) => {
@@ -319,11 +340,16 @@ async function lintFlavor() {
       return path.join(lintWorkDir, relativePath);
     });
 
+    // ESLint/Prettier run from frontendWorkDir (defined above) so the frontend's own tsconfig
+    // (which defines the `~` path alias) and eslintrc are the nearest configs. Running from the
+    // module root would resolve `~` against the base copy at the workdir root and misreport
+    // intra-package alias imports as extraneous dependencies.
+
     // Run Prettier first
-    const prettierExitCode = await runPrettier(lintWorkDir, workdirFiles, fixFlag);
+    const prettierExitCode = await runPrettier(frontendWorkDir, workdirFiles, fixFlag);
 
     // Run ESLint
-    const eslintExitCode = await runEslint(lintWorkDir, workdirFiles, fixFlag);
+    const eslintExitCode = await runEslint(frontendWorkDir, workdirFiles, fixFlag);
 
     // Combined exit code (fail if either failed)
     const exitCode = prettierExitCode !== 0 ? prettierExitCode : eslintExitCode;
